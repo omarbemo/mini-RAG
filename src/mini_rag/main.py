@@ -1,4 +1,4 @@
-from mini_rag.main import app_settings
+from mini_rag.helpers import get_settings , settings
 from fastapi import FastAPI
 from mini_rag.api import base , data
 from mini_rag.helpers import get_settings , settings
@@ -14,7 +14,7 @@ async def startup_db_client():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    app.mongo_conn.close()
+   await app.mongo_conn.close()
 
 
 

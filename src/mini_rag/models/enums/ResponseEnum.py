@@ -8,3 +8,5 @@ class ResponseEnum(Enum):
     FILE_VALIDATED_SUCCESSFUL = "file_validated_successfuly"
     FILE_CHUNKS_SUCCESS = "file_chunks_successfuly"
     FILE_CHUNKS_FAILED = "file_chunks_failed"
+    PROCESSING_SUCCESS = "processing_success"
+    PROCESSING_FAILED = "processing_failed"

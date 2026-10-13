@@ -1,13 +1,16 @@
 from pydantic import functional_serializers
-from fastapi import FastAPI , APIRouter , Depends , UploadFile ,status
+from fastapi import FastAPI , APIRouter , Depends , UploadFile ,status , Request
 from fastapi.responses import JSONResponse
 from mini_rag.helpers import get_settings , settings
 from mini_rag.controllers import DataController , ProjectController , ProcessController
 import aiofiles
-from mini_rag.models import ResponseEnum
+from mini_rag.models import ResponseEnum 
+from mini_rag.models.ProjectModel import ProjectModel
+from mini_rag.models.DataChunkModel import DataChunkModel
 import os
 import logging
 from .schemas.data import ProcessRequest 
+from mini_rag.models.db_schemas.data_chunk import DataChunk
 
 logger = logging.getLogger("uvicorn_error")
 
@@ -19,8 +22,12 @@ data_router = APIRouter(
 )
 
 @data_router.post("/upload/{project_id}")
-async def upload_data(project_id : str , file : UploadFile ,app_settings = Depends(get_settings)):
+async def upload_data(request : Request ,project_id : str , file : UploadFile ,app_settings = Depends(get_settings)):
     
+    project_model = ProjectModel(request.app.db_client)
+    project = await project_model.get_project_or_create_one(project_id=project_id)
+
+
     data_controller = DataController()
     is_valid , signal = data_controller.validate_uploaded_file(file=file)
 
@@ -55,10 +62,15 @@ async def upload_data(project_id : str , file : UploadFile ,app_settings = Depen
 
 
 @data_router.post("/process/{project_id}")
-async def process_endpoint(project_id:str,process_request : ProcessRequest):
+async def process_endpoint(request : Request , project_id:str,process_request : ProcessRequest):
     file_id = process_request.file_id
     chunk_size = process_request.chunk_size
     overlap = process_request.overlap
+    do_reset =process_request.do_reset 
+
+    project_model = ProjectModel(request.app.db_client)
+    project = await project_model.get_project_or_create_one(project_id=project_id)
+
 
 
 
@@ -72,9 +84,35 @@ async def process_endpoint(project_id:str,process_request : ProcessRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"signal":ResponseEnum.FILE_CHUNKS_FAILED.value}
         )
-    else:
-        return file_chunks
+    file_chunks_records = [
+        DataChunk( 
+                chunk_text = chunk.page_content,
+                chunk_metadata = chunk.metadata,
+                chunk_order = i+1,
+                chunk_project_id = project._id,
 
+        )
+        for i , chunk in enumerate(file_chunks)
+    ]
+
+
+    chunk_model = DataChunkModel(
+        db_client=request.app.db_client
+    )
+
+
+    if do_reset:
+        result = await chunk_model.delete_chunk_by_project_id(project_id=project._id)
+
+
+
+    no_rec = await chunk_model.insert_many_chunks(chunks=file_chunks_records,batch_size=100)
+    return JSONResponse(
+        content={
+            "signal": ResponseEnum.PROCESSING_SUCCESS.value ,
+            "chunks_inserted": no_rec
+        }
+        )
 
 
 
