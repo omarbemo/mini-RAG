@@ -6,3 +6,5 @@ class ResponseEnum(Enum):
     FILE_UPLOADED_SUCCESS = "file_uploaded_success"
     FILE_UPLOAD_FAILED = "file_upload_failed"
     FILE_VALIDATED_SUCCESSFUL = "file_validated_successfuly"
+    FILE_CHUNKS_SUCCESS = "file_chunks_successfuly"
+    FILE_CHUNKS_FAILED = "file_chunks_failed"

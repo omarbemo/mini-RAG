@@ -2,11 +2,12 @@ from pydantic import functional_serializers
 from fastapi import FastAPI , APIRouter , Depends , UploadFile ,status
 from fastapi.responses import JSONResponse
 from mini_rag.helpers import get_settings , settings
-from mini_rag.controllers import DataController , ProjectController
+from mini_rag.controllers import DataController , ProjectController , ProcessController
 import aiofiles
 from mini_rag.models import ResponseEnum
 import os
 import logging
+from .schemas.data import ProcessRequest 
 
 logger = logging.getLogger("uvicorn_error")
 
@@ -53,8 +54,26 @@ async def upload_data(project_id : str , file : UploadFile ,app_settings = Depen
         )
 
 
+@data_router.post("/process/{project_id}")
+async def process_endpoint(project_id:str,process_request : ProcessRequest):
+    file_id = process_request.file_id
+    chunk_size = process_request.chunk_size
+    overlap = process_request.overlap
+
+
+
+    processcontroller = ProcessController(project_id=project_id)
+    file_content = processcontroller.get_file_content(file_id=file_id)
+    file_chunks = processcontroller.process_file_content(file_content=file_content,
+                        file_id=file_id , chunk_size=chunk_size,overlap=overlap )
     
-    
+    if file_chunks is None or len(file_chunks)==0:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"signal":ResponseEnum.FILE_CHUNKS_FAILED.value}
+        )
+    else:
+        return file_chunks
 
 
 
