@@ -1,3 +1,4 @@
+from mini_rag.controllers import ProjectController
 from mini_rag.models import BaseDataModel
 from mini_rag.models.db_schemas import Project
 from mini_rag.models.enums.DataBaseEnum import DataBaseEnum
@@ -7,9 +8,31 @@ class ProjectModel(BaseDataModel):
         super().__init__(db_client=db_client)
         self.collection = self.db_client[DataBaseEnum.COLLECTION_PROJEECT_NAME.value]
 
-    async def create_project(self,project : Project):
-        result = await self.collection.insert_one(project.dict())
-        project._id = result.inserted_id
+
+    @classmethod
+    async def create_instance(cls, db_client: object):
+        instance = cls(db_client)
+        await instance.init_collection()
+        return instance
+
+
+    async def init_collections(self):
+        all_collections = await self.db_client.list_collections_names()
+        if DataBaseEnum.COLLECTION_PROJEECT_NAME.value not in all_collections:
+            self.collection = self.db_client[DataBaseEnum.COLLECTION_PROJEECT_NAME.value]
+            indexes = Project.get_indexes()
+            for index in indexes :
+                await self.collection.create_index(
+                    index["key"],
+                    name = index["name"],
+                    unique = index["unique"]
+                )
+
+    async def create_project(self, project: Project):
+        result = await self.collection.insert_one(
+        project.model_dump(by_alias=True, exclude_none=True)
+    )
+        project.id = result.inserted_id
         return project
         
 
