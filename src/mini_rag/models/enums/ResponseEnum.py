@@ -10,3 +10,5 @@ class ResponseEnum(Enum):
     FILE_CHUNKS_FAILED = "file_chunks_failed"
     PROCESSING_SUCCESS = "processing_success"
     PROCESSING_FAILED = "processing_failed"
+    NO_FILES_ERROR = "no_files_retrived"
+    FILE_ID_ERROR = "no_file_id_with_this_id"
