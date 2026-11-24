@@ -1,4 +1,4 @@
-from mini_rag.stores.llm import LLMinterface
+from mini_rag.stores.llm.LLMinterface import LLMinterface
 from mini_rag.stores.llm.LLMEnums import OpenAIEnums
 from openai import OpenAI
 
