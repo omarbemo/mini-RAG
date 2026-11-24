@@ -7,10 +7,11 @@ vector is created with `Modifier.IDF`), so scores stay right as the corpus grows
 import re
 import zlib
 from collections import Counter
-from typing import Protocol
 
 import snowballstemmer
 from qdrant_client import models
+
+from ..SparseEncoderInterface import SparseEncoderInterface
 
 _WORD = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
 
@@ -29,13 +30,7 @@ STOPWORDS = frozenset(
 )
 
 
-class SparseEncoder(Protocol):
-    def encode_docs(self, texts: list[str]) -> list[models.SparseVector]: ...
-
-    def encode_query(self, text: str) -> models.SparseVector: ...
-
-
-class Bm25Encoder:
+class Bm25Provider(SparseEncoderInterface):
     """Lowercase, drop stop words, Snowball-stem, hash each stem to a uint32 index.
 
     `avg_len` stands in for the corpus's mean document length (in kept tokens);

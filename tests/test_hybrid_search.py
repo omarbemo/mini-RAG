@@ -108,3 +108,9 @@ def test_collection_without_sparse_vector_still_searches_dense(vectordb, project
     assert nlp.index_into_vector_db(project, chunks(DOCS, project))
     results = nlp.search_vector_db_collection(project, "office fridays", limit=1, rerank=False)
     assert results[0].text == DOCS[3]
+
+
+def test_rrf_rewards_agreement_and_keeps_first_seen_on_ties():
+    # 1 and 3 tie (1/61 + 1/63) just above 2 (2/62); the tie keeps first-seen order.
+    assert [i for i, _ in NLPController.rrf_fuse([[1, 2, 3], [3, 2, 1]])] == [1, 3, 2]
+    assert [i for i, _ in NLPController.rrf_fuse([[1, 2], [2, 3]])][0] == 2
