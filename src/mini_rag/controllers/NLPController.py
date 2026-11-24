@@ -2,8 +2,7 @@ from .BaseController import BaseController
 from mini_rag.models.db_schemas.data_chunk import DataChunk
 from mini_rag.models.db_schemas.project import Project
 from mini_rag.stores.llm.LLMEnums import DocumentTypeEnum
-from mini_rag.rag.fusion import rrf_fuse
-from mini_rag.rag.sparse import Bm25Encoder
+from mini_rag.stores.sparse.providers import Bm25Provider
 from typing import List
 import json
 import uuid
@@ -20,7 +19,7 @@ class NLPController(BaseController):
         self.embedding_client = embedding_client
         self.template_parser = template_parser
         self.reranker = reranker
-        self.sparse_encoder = sparse_encoder or Bm25Encoder()
+        self.sparse_encoder = sparse_encoder or Bm25Provider()
 
     @classmethod
     def from_app(cls, app):
@@ -40,7 +39,16 @@ class NLPController(BaseController):
         if chunk_id is None:
             return str(uuid.uuid4())
         return str(uuid.uuid5(uuid.NAMESPACE_URL, f"mini-rag/chunk/{chunk_id}"))
-        
+
+    @staticmethod
+    def rrf_fuse(rankings: List[list], k: int = 60) -> List[tuple]:
+        """Reciprocal rank fusion; ties keep the order in which ids were first seen."""
+        scores: dict = {}
+        for ranking in rankings:
+            for rank, item in enumerate(ranking, start=1):
+                scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank)
+        return sorted(scores.items(), key=lambda kv: -kv[1])
+
 
     def create_collection_name(self, project_id: str):
         return f"collection_{project_id}".strip()
@@ -124,7 +132,7 @@ class NLPController(BaseController):
         docs = {d.id: d for ranked in lists for d in ranked}
         results = [
             docs[i].model_copy(update={"score": score})
-            for i, score in rrf_fuse([[d.id for d in ranked] for ranked in lists])
+            for i, score in self.rrf_fuse([[d.id for d in ranked] for ranked in lists])
         ]
 
         # step4: cross-encoder rerank of the head

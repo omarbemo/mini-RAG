@@ -33,6 +33,10 @@ VECTOR_DB_DISTANCE_METHOD="cosine"
 
 # Cross-encoder reranker (local ONNX, ~570 MB download on first start)
 RERANKER_ENABLED=true
+RERANKER_BACKEND="ONNX"
+
+# Keyword (sparse) vectors for hybrid search
+SPARSE_ENCODER_BACKEND="BM25"
 
 # ========================= Template Configs =========================
 PRIMARY_LANG = "en"

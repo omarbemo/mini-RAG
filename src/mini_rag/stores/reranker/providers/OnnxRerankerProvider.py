@@ -1,9 +1,9 @@
 """Cross-encoder reranking with bge-reranker-v2-m3 through onnxruntime (no PyTorch)."""
 
-from typing import Protocol
-
 import numpy as np
 from tokenizers import Tokenizer
+
+from ..RerankerInterface import RerankerInterface
 
 # Pinned revision of the community ONNX export of BAAI/bge-reranker-v2-m3 (Apache-2.0).
 RERANKER = {
@@ -16,13 +16,7 @@ RERANKER = {
 _TOKEN_INPUTS = ("input_ids", "attention_mask", "token_type_ids")
 
 
-class Reranker(Protocol):
-    def score(self, query: str, texts: list[str]) -> list[float]:
-        """Return one relevance score per text; higher is more relevant."""
-        ...
-
-
-class OnnxReranker:
+class OnnxRerankerProvider(RerankerInterface):
     """Scores (query, text) pairs with an onnxruntime session that outputs logits.
 
     Each pair is cut to `max_length` tokens, longest side first, so a long query
@@ -65,16 +59,16 @@ class OnnxReranker:
             )
         return scores
 
+    @classmethod
+    def from_pretrained(cls) -> "OnnxRerankerProvider":
+        """Download (once, then cached) the pinned reranker and open a CPU session."""
+        import onnxruntime as ort
+        from huggingface_hub import hf_hub_download
 
-def load_reranker() -> OnnxReranker:
-    """Download (once, then cached) the pinned reranker and open a CPU session."""
-    import onnxruntime as ort
-    from huggingface_hub import hf_hub_download
+        def fetch(name: str) -> str:
+            return hf_hub_download(
+                RERANKER["repo"], RERANKER[name], revision=RERANKER["revision"]
+            )
 
-    def fetch(name: str) -> str:
-        return hf_hub_download(
-            RERANKER["repo"], RERANKER[name], revision=RERANKER["revision"]
-        )
-
-    session = ort.InferenceSession(fetch("model"), providers=["CPUExecutionProvider"])
-    return OnnxReranker(session, Tokenizer.from_file(fetch("tokenizer")))
+        session = ort.InferenceSession(fetch("model"), providers=["CPUExecutionProvider"])
+        return cls(session, Tokenizer.from_file(fetch("tokenizer")))

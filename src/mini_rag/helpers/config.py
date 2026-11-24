@@ -33,6 +33,10 @@ class settings(BaseSettings):
 
     # Cross-encoder reranker (bge-reranker-v2-m3, ONNX); first start downloads ~570 MB.
     RERANKER_ENABLED: bool = True
+    RERANKER_BACKEND: str = "ONNX"
+
+    # Keyword (sparse) vectors for hybrid search.
+    SPARSE_ENCODER_BACKEND: str = "BM25"
 
 
     PRIMARY_LANG: str = "en"
