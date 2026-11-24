@@ -72,13 +72,13 @@ class CoHereProvider(LLMinterface):
             return None
         
         input_type = CoHereEnums.DOCUMENT
-        if document_type == DocumentTypeEnum.QUERY:
+        if document_type == DocumentTypeEnum.QUERY.value:
             input_type = CoHereEnums.QUERY
 
         response = self.client.embed(
             model = self.embedding_model_id,
             texts = [self.process_text(text)],
-            input_type = input_type,
+            input_type = input_type.value,
             embedding_types=['float'],
         )
 

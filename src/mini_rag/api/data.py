@@ -1,6 +1,8 @@
 from pydantic import functional_serializers
 from fastapi import FastAPI , APIRouter , Depends , UploadFile ,status , Request
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
+from bson.objectid import ObjectId
 from mini_rag.helpers import get_settings , settings
 from mini_rag.controllers import DataController , ProjectController , ProcessController
 import aiofiles
@@ -13,6 +15,7 @@ import logging
 from .schemas.data import ProcessRequest 
 from mini_rag.models.db_schemas.data_chunk import DataChunk
 from mini_rag.models.db_schemas.asset import Asset
+from mini_rag.controllers.NLPController import NLPController
 
 logger = logging.getLogger("uvicorn_error")
 
@@ -72,7 +75,8 @@ async def upload_data(request : Request ,project_id : str , file : UploadFile ,a
     return JSONResponse(
             content={
                 "signal": ResponseEnum.FILE_UPLOADED_SUCCESS.value,
-                "file_id": str(asset_record.id),
+                "file_id": file_id,              # pass this to /process
+                "asset_id": str(asset_record.id),
             }
         )
 
@@ -95,9 +99,12 @@ async def process_endpoint(request : Request , project_id:str,process_request : 
     project = await project_model.get_project_or_create_one(project_id=project_id)
 
 
+    asset_model = await AssetModel.create_instance(
+        db_client=request.app.db_client)
+
     project_files_ids = {}
     if process_request.file_id:
-        asset_record = await asset_model.get_asset_record(asset_project_id = project_id
+        asset_record = await asset_model.get_asset_record(asset_project_id = project.id
                                 ,asset_name=process_request.file_id)
 
         if asset_record is None:
@@ -112,8 +119,6 @@ async def process_endpoint(request : Request , project_id:str,process_request : 
         }
 
     else :
-        asset_model = await AssetModel.create_instance(
-        db_client=request.app.db_client)
         project_files = await asset_model.get_all_project_assets(
             asset_project_id = project.id,
             asset_type = "file",)
@@ -139,8 +144,13 @@ async def process_endpoint(request : Request , project_id:str,process_request : 
         )
 
 
+    nlp_controller = NLPController.from_app(request.app)
+    no_indexed = 0
+
     if do_reset:
         result = await chunk_model.delete_chunk_by_project_id(project_id=project.id)
+        if process_request.do_push:
+            nlp_controller.reset_vector_db_collection(project=project)
 
 
     for _id , file_id in project_files_ids.items():
@@ -162,6 +172,7 @@ async def process_endpoint(request : Request , project_id:str,process_request : 
 
         file_chunks_records = [
             DataChunk( 
+                    id = ObjectId(),   # known now, so the Qdrant point can reuse it
                     chunk_text = chunk.page_content,
                     chunk_metadata = chunk.metadata,
                     chunk_order = i+1,
@@ -176,12 +187,27 @@ async def process_endpoint(request : Request , project_id:str,process_request : 
         no_rec += await chunk_model.insert_many_chunks(chunks=file_chunks_records,batch_size=100)
         no_files +=1
 
+        # Direct ingest: embed (dense + BM25) and store in Qdrant, no separate push.
+        if process_request.do_push:
+            is_inserted = await run_in_threadpool(
+                nlp_controller.index_into_vector_db,
+                project=project,
+                chunks=file_chunks_records,
+            )
+            if not is_inserted:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={"signal": ResponseEnum.INSERT_INTO_VECTORDB_ERROR.value}
+                )
+            no_indexed += len(file_chunks_records)
+
 
     return JSONResponse(
         content={
             "signal": ResponseEnum.PROCESSING_SUCCESS.value ,
             "chunks_inserted": no_rec,
             "no_files":no_files,
+            "chunks_indexed": no_indexed,
         }
         )
 

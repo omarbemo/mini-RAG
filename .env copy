@@ -11,7 +11,7 @@ MONGODB_DATABASE = "mini_rag"
 
 # ========================= LLM Config =========================
 GENERATION_BACKEND = "OPENAI"
-EMBEDDING_BACKEND = "COHERE"
+EMBEDDING_BACKEND = "COHERE"   # or "ONNX": local bge-small-en-v1.5, no key, size 384
 
 OPENAI_API_KEY="sk-"
 OPENAI_API_URL=
@@ -30,6 +30,9 @@ GENERATION_DAFAULT_TEMPERATURE=0.1
 VECTOR_DB_BACKEND="QDRANT"
 VECTOR_DB_PATH="qdrant_db"
 VECTOR_DB_DISTANCE_METHOD="cosine"
+
+# Cross-encoder reranker (local ONNX, ~570 MB download on first start)
+RERANKER_ENABLED=true
 
 # ========================= Template Configs =========================
 PRIMARY_LANG = "en"

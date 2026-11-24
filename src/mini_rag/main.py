@@ -7,6 +7,8 @@ from mini_rag.stores.llm import LLMProviderFactory
 from mini_rag.stores.vectordb import VectorDBProviderFactory
 from mini_rag.stores.llm.templates.template_parser import TemplateParser
 from pymongo import AsyncMongoClient
+from mini_rag.rag.rerank import load_reranker
+from mini_rag.rag.sparse import Bm25Encoder
 
 
 async def startup_span(app: FastAPI):
@@ -37,6 +39,11 @@ async def startup_span(app: FastAPI):
         provider=app_settings.VECTOR_DB_BACKEND
     )
     app.vectordb_client.connect()
+
+    # Hybrid search: BM25 keyword vectors + optional cross-encoder reranker.
+    app.sparse_encoder = Bm25Encoder()
+    app.reranker = load_reranker() if app_settings.RERANKER_ENABLED else None
+
     app.template_parser = TemplateParser(
         language=app_settings.PRIMARY_LANG,
         default_language=app_settings.DEFAULT_LANG,

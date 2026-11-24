@@ -11,8 +11,11 @@ dependencies = [
     "aiofiles>=25.1.0",
     "cohere>=7.3.0",
     "fastapi>=0.143.0",
+    "huggingface-hub>=2.2.0",
     "langchain>=1.4.5",
     "langchain-community>=0.4.2",
+    "numpy>=2.2.6",
+    "onnxruntime>=1.23.2",
     "openai>=3.36.0",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.15.0",
@@ -21,6 +24,8 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "python-multipart>=0.0.32",
     "qdrant-client>=1.20.0",
+    "snowballstemmer>=3.1.1",
+    "tokenizers>=0.23.3",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -30,3 +35,8 @@ mini-rag = "mini_rag:main"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
