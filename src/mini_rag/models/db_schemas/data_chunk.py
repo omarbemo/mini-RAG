@@ -34,3 +34,5 @@ class DataChunk(BaseModel):
 class RetrievedDocument(BaseModel):
     text: str
     score: float
+    id: Optional[str] = None
+    metadata: Optional[dict] = None

@@ -31,6 +31,9 @@ class settings(BaseSettings):
     VECTOR_DB_PATH : str
     VECTOR_DB_DISTANCE_METHOD: str = None
 
+    # Cross-encoder reranker (bge-reranker-v2-m3, ONNX); first start downloads ~570 MB.
+    RERANKER_ENABLED: bool = True
+
 
     PRIMARY_LANG: str = "en"
     DEFAULT_LANG: str = "en"

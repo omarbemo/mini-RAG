@@ -1,6 +1,7 @@
 from pydantic import functional_serializers
 from fastapi import FastAPI , APIRouter , Depends , UploadFile ,status , Request
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
 from mini_rag.helpers import get_settings , settings
 from mini_rag.controllers import DataController , ProjectController , ProcessController
 import aiofiles
@@ -46,18 +47,11 @@ async def index_project(request: Request, project_id: str, push_request: PushReq
             }
         )
     
-    nlp_controller = NLPController(
-        vectordb_client=request.app.vectordb_client,
-        generation_client=request.app.generation_client,
-        embedding_client=request.app.embedding_client,
-        template_parser = request.app.template_parser
-
-    )
+    nlp_controller = NLPController.from_app(request.app)
 
     has_records = True
     page_no = 1
     inserted_items_count = 0
-    idx = 0
 
     while has_records:
         page_chunks = await chunk_model.get_poject_chunks(project_id=project.id, page_no=page_no)
@@ -68,14 +62,13 @@ async def index_project(request: Request, project_id: str, push_request: PushReq
             has_records = False
             break
 
-        chunks_ids =  list(range(idx, idx + len(page_chunks)))
-        idx += len(page_chunks)
-        
-        is_inserted = nlp_controller.index_into_vector_db(
+        # Point ids come from the Mongo chunk ids, so re-pushing overwrites.
+        # Reset only before the first page, or each page would wipe the last.
+        is_inserted = await run_in_threadpool(
+            nlp_controller.index_into_vector_db,
             project=project,
             chunks=page_chunks,
-            do_reset=push_request.do_reset,
-            chunks_ids=chunks_ids
+            do_reset=push_request.do_reset and page_no == 2,
         )
 
         if not is_inserted:
@@ -106,11 +99,7 @@ async def get_project_index_info(request: Request, project_id: str):
         project_id=project_id
     )
 
-    nlp_controller = NLPController(
-        vectordb_client=request.app.vectordb_client,
-        generation_client=request.app.generation_client,
-        embedding_client=request.app.embedding_client,
-    )
+    nlp_controller = NLPController.from_app(request.app)
 
     collection_info = nlp_controller.get_vector_db_collection_info(project=project)
 
@@ -132,15 +121,12 @@ async def search_index(request: Request, project_id: str, search_request: Search
         project_id=project_id
     )
 
-    nlp_controller = NLPController(
-        vectordb_client=request.app.vectordb_client,
-        generation_client=request.app.generation_client,
-        embedding_client=request.app.embedding_client,
-        template_parser=request.app.template_parser
-    )
+    nlp_controller = NLPController.from_app(request.app)
 
-    results = nlp_controller.search_vector_db_collection(
-        project=project, text=search_request.text, limit=search_request.limit
+    results = await run_in_threadpool(
+        nlp_controller.search_vector_db_collection,
+        project=project, text=search_request.text, limit=search_request.limit,
+        rerank=bool(search_request.rerank),
     )
 
     if not results:
@@ -154,7 +140,7 @@ async def search_index(request: Request, project_id: str, search_request: Search
     return JSONResponse(
         content={
             "signal": ResponseEnum.VECTORDB_SEARCH_SUCCESS.value,
-            "results": [ result.dict()  for result in results ]
+            "results": [ result.model_dump()  for result in results ]
         }
     )
 
@@ -169,14 +155,10 @@ async def answer_rag(request: Request, project_id: str, search_request: SearchRe
         project_id=project_id
     )
 
-    nlp_controller = NLPController(
-        vectordb_client=request.app.vectordb_client,
-        generation_client=request.app.generation_client,
-        embedding_client=request.app.embedding_client,
-        
-    )
+    nlp_controller = NLPController.from_app(request.app)
 
-    answer, full_prompt, chat_history = nlp_controller.answer_rag_question(
+    answer, full_prompt, chat_history = await run_in_threadpool(
+        nlp_controller.answer_rag_question,
         project=project,
         query=search_request.text,
         limit=search_request.limit,

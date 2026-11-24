@@ -6,6 +6,9 @@ from typing import List
 import uuid
 from mini_rag.models.db_schemas.data_chunk import RetrievedDocument
 
+# Named sparse vector for BM25 keyword search; the dense vector stays unnamed.
+SPARSE_VECTOR_NAME = "bm25"
+
 class QdrantDBProvider(VectorDBInterface):
 
     def __init__(self, db_path: str, distance_method: str):
@@ -52,7 +55,11 @@ class QdrantDBProvider(VectorDBInterface):
                 vectors_config=models.VectorParams(
                     size=embedding_size,
                     distance=self.distance_method
-                )
+                ),
+                # Qdrant applies IDF itself, so BM25 scores track the corpus.
+                sparse_vectors_config={
+                    SPARSE_VECTOR_NAME: models.SparseVectorParams(modifier=models.Modifier.IDF)
+                },
             )
 
             return True
@@ -87,15 +94,27 @@ class QdrantDBProvider(VectorDBInterface):
 
         return True
     
+    def has_sparse_vectors(self, collection_name: str) -> bool:
+        """Collections made before hybrid search have no BM25 vector; reset to add it."""
+        params = self.client.get_collection(collection_name=collection_name).config.params
+        return SPARSE_VECTOR_NAME in (params.sparse_vectors or {})
+
     def insert_many(self, collection_name: str, texts: list,
                     vectors: list, metadata: list = None,
-                    record_ids: list = None, batch_size: int = 32):
+                    record_ids: list = None, batch_size: int = 32,
+                    sparse_vectors: list = None):
 
         if metadata is None:
             metadata = [None] * len(texts)
 
         if record_ids is None:
             record_ids = [str(uuid.uuid4()) for _ in texts]
+
+        if sparse_vectors is not None and self.has_sparse_vectors(collection_name):
+            vectors = [
+                {"": dense, SPARSE_VECTOR_NAME: sparse}
+                for dense, sparse in zip(vectors, sparse_vectors)
+            ]
 
         points = [
             models.PointStruct(
@@ -127,14 +146,35 @@ class QdrantDBProvider(VectorDBInterface):
             query=vector,
             limit=limit,
             with_payload=True,
-        )
+        ).points
         if not results or len(results) == 0:
             return None
         
-        return [
-            RetrievedDocument(**{
-                "score": result.score,
-                "text": result.payload["text"],
-            })
-            for result in results
-        ]
+        return [self._to_document(result) for result in results]
+
+    def search_lists(self, collection_name: str, vector: list,
+                     sparse_vector: models.SparseVector = None, limit: int = 30):
+        """Ranked lists for hybrid search, sent in one batch: dense first, then BM25.
+
+        The BM25 list is left out when the query has no keywords (stop words only)
+        or the collection has no sparse vector.
+        """
+        requests = [models.QueryRequest(query=vector, limit=limit, with_payload=True)]
+        if (sparse_vector is not None and sparse_vector.indices
+                and self.has_sparse_vectors(collection_name)):
+            requests.append(models.QueryRequest(
+                query=sparse_vector, using=SPARSE_VECTOR_NAME, limit=limit, with_payload=True
+            ))
+        responses = self.client.query_batch_points(
+            collection_name=collection_name, requests=requests
+        )
+        return [[self._to_document(p) for p in r.points] for r in responses]
+
+    @staticmethod
+    def _to_document(point) -> RetrievedDocument:
+        return RetrievedDocument(
+            id=str(point.id),
+            score=point.score,
+            text=point.payload["text"],
+            metadata=point.payload.get("metadata"),
+        )

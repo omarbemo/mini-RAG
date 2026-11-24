@@ -43,10 +43,17 @@ class VectorDBInterface(ABC):
     @abstractmethod
     def insert_many(self, collection_name: str, texts: list, 
                           vectors: list, metadata: list = None, 
-                          record_ids: list = None, batch_size: int = 50):
+                          record_ids: list = None, batch_size: int = 50,
+                          sparse_vectors: list = None):
         pass
 
     @abstractmethod
     def search_by_vector(self, collection_name: str, vector: list, limit: int) -> List[RetrievedDocument]:
+        pass
+
+    @abstractmethod
+    def search_lists(self, collection_name: str, vector: list,
+                     sparse_vector=None, limit: int = 30) -> List[List[RetrievedDocument]]:
+        """Dense ranked list plus, when available, a keyword (BM25) ranked list."""
         pass
     

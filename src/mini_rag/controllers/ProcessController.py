@@ -7,6 +7,7 @@ from mini_rag.models import ResponseEnum
 from mini_rag.models import ProcessingEnum
 
 import os
+import re
 
 
 from langchain_community.document_loaders import TextLoader , PyMuPDFLoader
@@ -45,21 +46,30 @@ class ProcessController(BaseController):
         return None
 
         
-    def process_file_content(self , file_content : list , file_id : str , chunk_size : int = 100,
-                            overlap : int = 20):
+    # Lines holding only a bullet glyph (PDF lists) are noise in every chunk.
+    _BULLET_LINE = re.compile(r"^[ \t]*[●•▪◦·][ \t]*$\n?", re.MULTILINE)
+
+    def process_file_content(self , file_content : list , file_id : str , chunk_size : int = 800,
+                            overlap : int = 100):
+        """Split loaded pages into chunks of about `chunk_size` characters.
+
+        Keep chunk_size <= INPUT_DAFAULT_MAX_CHARACTERS: the LLM providers cut
+        embedding input there. Metadata is reduced to file name and page, so the
+        server's file paths are not stored or returned by search.
+        """
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size = chunk_size,
             chunk_overlap = overlap,
             length_function = len,
         )
         file_content_texts = [
-            rec.page_content
+            self._BULLET_LINE.sub("", rec.page_content)
             for rec in file_content
         ]
         file_content_metadata = [
-            rec.metadata
+            {"source": file_id, **({"page": rec.metadata["page"]} if "page" in rec.metadata else {})}
             for rec in file_content
-        ]    
+        ]
 
         chunks = text_splitter.create_documents(
             file_content_texts,

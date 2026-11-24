@@ -1,6 +1,7 @@
 from .LLMEnums import LLMEnums
 from mini_rag.stores.llm.providers.OpenAiProvider import OpenAIProvider
 from mini_rag.stores.llm.providers.CohereProvider import CoHereProvider
+from mini_rag.stores.llm.providers.OnnxProvider import OnnxProvider
 
 
 
@@ -25,5 +26,8 @@ class LLMProviderFactory:
                 default_generation_max_output_tokens=self.config.GENERATION_DAFAULT_MAX_TOKENS,
                 default_generation_temperature=self.config.GENERATION_DAFAULT_TEMPERATURE
             )
+
+        if provider == LLMEnums.ONNX.value:
+            return OnnxProvider()
 
         return None
